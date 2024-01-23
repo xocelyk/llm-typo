@@ -18,21 +18,6 @@ def few_shot_qa(question, serialized_choices):
 
             {'role': 'user', 'content': "Q: {}\n{}".format(question, serialized_choices)}]
 
-# Question: Where does my body go after I am no longer living?
-# Typo: Where does my boyd go after I am no longer living?
-
-# Question: What might happen to a person with a tumor?
-# Typo: What might happen to a peesbn with a tumor?
-
-# Question: If he did not pass course this semester he would have to what?
-# Typo: If he did not pss oxes this semester he would have to what?
-
-# Question: The knob of the kitchen drawer wouldn't stay tightened, so he went to buy a new screw where?
-# Typo: The knlb of the kitchen drawer wouldn't stay tightened, so he went to buy a new screw where?
-
-# Question: The small locally owned beauty salon had it's grand opening, people hoped it would boost the economy in the surrounding what?
-# Typo: The small locally owned beauty sbllol had it's grand opening, people hoped it would boost the economy in the surrounding what?
-
 def few_shot_correct_spelling(question):
         return [{'role': 'system', 'content': 'You are a helpful assistant. Your task is to correct spelling mistakes.'},
                 

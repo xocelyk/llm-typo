@@ -35,6 +35,5 @@ def add_typo(word: str, p: float = 0.1) -> str:
             cur.append(word[i])
     return ''.join(cur)
 
-
 def edit_distance(s1: str, s2: str) -> int:
     return editdistance.eval(s1, s2)

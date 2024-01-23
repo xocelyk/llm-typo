@@ -30,7 +30,7 @@ def get_prompt(question: str, serialized_choices: list[str]) -> str:
     return prompt
 
 def query(messages):
-    return chatgpt(messages=messages, model="gpt-3.5-turbo-1106", max_tokens=1000, temperature=0)[0]
+    return chatgpt(messages=messages, model="gpt-3.5-turbo", max_tokens=1000, temperature=0)[0]
 
 def load_data():
     '''
@@ -53,8 +53,6 @@ def load_data():
     return data
 
 def load_example(example: dict):
-    # TODO: double check no double instance of concept word
-    # TODO: what is the question concept? is it always a single word? in the question? why should we perturb it alone?
     question = example['question']['stem']
     concept = example['question']['question_concept']
     if not check_concept_in_question(question, concept):
@@ -142,7 +140,7 @@ def get_probability_of_word(question: list, start_index: int, end_index, model):
     return word_probability.item()
 
 def parse_answer(ans):
-    # maybe todo
+    # naive parse
     return ans.strip()
 
 def main():
@@ -158,12 +156,11 @@ def main():
     '''
     
     data = load_data()
-    data = data[:300]
-
+    data = data[:1000]
     typo_data = []
     p_range = [0.1, 0.2, 0.4, 0.8]
-    num_samples = 1
-    for example in data:
+    num_samples = 1 # generate num_samples typos for each p
+    for i, example in enumerate(data):
         start_index = example['StartIndex']
         end_index = example['EndIndex']
         question = example['Question']
@@ -174,38 +171,47 @@ def main():
             else:
                 typos = create_typos(question, start_index, end_index, p=p, num_samples=num_samples)
             for typo in typos:
+                typo['Id'] = i
                 typo['ProbWord'] = prob_word
                 for k, v in example.items():
                     typo[k] = v
             typo_data.extend(typos)
     
     results = []
+    ignore_id = None
     for typo in typo_data:
+        if ignore_id and typo['Id'] == ignore_id:
+            continue
+        else:
+            ignore_id = None
+        if typo['p'] != 0 and typo['EditDistance'] == 0: # only consider examples where the typo is not the same as the original question
+            # we end up throwing out a lot of examples with low p
+            continue
         prompt = get_prompt(typo['TypoQuestion'], typo['AnswerChoices'])
-        cache_prompt = prompt.copy()
-        ans = query(prompt)
-        ans = parse_answer(ans)
-        print('Gold Label: \t\t' + typo['CorrectAnswer'])
-        print('Question: \t\t' + typo['TypoQuestion'])
-        
+        prev_prompt = prompt
+        ans = parse_answer(query(prompt))
+        correct = ans.lower() == typo['CorrectAnswer'].lower()
+        if typo['p'] == 0 and not correct: # only consider examples where the model gets the original question correct
+            ignore_id = typo['Id']
+            continue
         example_data = typo
         example_data['Answer'] = ans
         example_data['CorrectAnswer'] = typo['CorrectAnswer']
-        example_data['Correct'] = ans.lower() == typo['CorrectAnswer'].lower()
+        example_data['Correct'] = correct
         valid = ans[1] == ')'
         example_data['Valid'] = valid
         corrected_question = query(few_shot_correct_spelling(typo['TypoQuestion']))
         corrected_question = parse_answer(corrected_question)
         prompt = get_prompt(corrected_question, typo['AnswerChoices'])
         if corrected_question == typo['TypoQuestion']:
-            assert prompt == cache_prompt
-        corrected_ans = query(prompt)
-        corrected_ans = parse_answer(corrected_ans)
-        if corrected_question == typo['TypoQuestion']:
-            assert corrected_ans == ans, 'Original Prompt: {}\nCorrected Prompt: {}'.format(cache_prompt, prompt)
+            assert prompt == prev_prompt
+        corrected_ans = parse_answer(query(prompt))
         example_data['CorrectedQuestion'] = corrected_question
         example_data['CorrectedAnswer'] = parse_answer(corrected_ans)
         example_data['CorrectedCorrect'] = corrected_ans.lower() == typo['CorrectAnswer'].lower()
+
+        print('Gold Label: \t\t' + typo['CorrectAnswer'])
+        print('Question: \t\t' + typo['TypoQuestion'])
         print('Corrected Question: \t' + corrected_question)
         print('Answer: \t\t' + ans)
         print('Corrected Answer: \t' + corrected_ans)
@@ -213,8 +219,7 @@ def main():
         results.append(example_data)
     
         df = pd.DataFrame(results)
-        df.to_csv('results_experiment_3.csv')
-
+        df.to_csv('results_experiment_4.csv')
 
 if __name__ == "__main__":
     main()
